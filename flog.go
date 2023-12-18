@@ -10,12 +10,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/DataDog/datadog-go/v5/statsd"
 )
 
 var id = time.Now().UnixNano()
 
 // Generate generates the logs with given options
-func Generate(option *Option) error {
+func Generate(statsd *statsd.Client, option *Option) error {
 	var (
 		splitCount = 1
 		created    = time.Now()
@@ -23,6 +25,10 @@ func Generate(option *Option) error {
 		interval time.Duration
 		delay    time.Duration
 	)
+
+	if statsd != nil {
+		defer statsd.Flush()
+	}
 
 	buildCache(option.Bytes)
 
@@ -57,7 +63,16 @@ func Generate(option *Option) error {
 					writer, _ = RotateFile(writer, logFileName)
 				}
 			}
+
+			if statsd != nil {
+				statsd.Count("flog.generate.lines", int64(rate), nil, 1.0)
+				statsd.Count("flog.generate.bytes", int64(rate)*int64(option.Bytes), nil, 1.0)
+			}
 			elapsed := time.Since(start)
+			if statsd != nil {
+				statsd.Count("flog.generate.time", int64(elapsed/1000/1000), nil, 1.0)
+				statsd.Count("flog.generate.run", 1, nil, 1.0)
+			}
 			time.Sleep(time.Second - elapsed)
 		}
 	}
@@ -81,6 +96,11 @@ func Generate(option *Option) error {
 			}
 			created = created.Add(interval)
 		}
+
+		if statsd != nil {
+			statsd.Count("flog.generate.lines", int64(option.Number), nil, 1.0)
+			statsd.Count("flog.generate.bytes", int64(option.Number)*int64(option.Bytes), nil, 1.0)
+		}
 	} else {
 		// Generates the logs until the certain size in bytes is reached
 		bytes := 0
@@ -101,12 +121,21 @@ func Generate(option *Option) error {
 			}
 			created = created.Add(interval)
 		}
+
+		if statsd != nil {
+			statsd.Count("flog.generate.bytes", int64(option.Bytes), nil, 1.0)
+		}
+	}
+
+	if statsd != nil {
+		statsd.Count("flog.generate.run", 1, nil, 1.0)
 	}
 
 	if option.Type != "stdout" {
 		_ = writer.Close()
 		fmt.Println(logFileName, "is created.")
 	}
+
 	return nil
 }
 

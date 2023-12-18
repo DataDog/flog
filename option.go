@@ -45,6 +45,7 @@ Options:
   -w, --overwrite          overwrite the existing log files.
   -l, --loop               loop output forever until killed.
   -a  --rotate             rotate log after x logs (only in log mode)
+      --statsd string      statsd connection url (empty means "no statsd")
 `
 
 var validFormats = []string{"app_log", "apache_common", "apache_combined", "apache_error", "rfc3164", "rfc5424", "common_log", "json"}
@@ -65,6 +66,7 @@ type Option struct {
 	Increment int
 	Seq       bool
 	Rotate    int
+	Statsd    string
 }
 
 func init() {
@@ -185,6 +187,7 @@ func ParseOptions() *Option {
 	forever := pflag.BoolP("loop", "l", false, "Loop output forever until killed")
 	increment := pflag.IntP("increment", "i", opts.Increment, "How many more logs to send each iteration")
 	rotate := pflag.IntP("rotate", "a", opts.Rotate, "when to rotate log file")
+	statsd := pflag.StringP("statsd", "", opts.Statsd, "statsd connection url")
 
 	pflag.Parse()
 
@@ -223,9 +226,11 @@ func ParseOptions() *Option {
 	if opts.Rotate, err = ParseNumber(*rotate); err != nil {
 		errorExit(err)
 	}
+
 	opts.Output = *output
 	opts.Overwrite = *overwrite
 	opts.Forever = *forever
 	opts.Seq = *seq
+	opts.Statsd = *statsd
 	return opts
 }
